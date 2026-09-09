@@ -1,27 +1,36 @@
-# Instainfo Resumos — Motor de Clipping de Notícias
+# Instainfo Resumos — Motor de Clipping Automatizado
 
-Sistema automatizado de **clipping de notícias** para monitoramento de veículos de comunicação brasileiros, com foco em dois módulos independentes:
+Plataforma de **monitoramento e clipping automatizado de notícias** desenvolvida para a **Instainfo** (assessoria de comunicação). O sistema coleta notícias de 18 veículos de imprensa brasileiros, aplica filtragem semântica multi-nível para identificar matérias relevantes para cada cliente e gera relatórios `.docx` prontos para envio via WhatsApp.
 
-| Módulo | Foco | Clientes |
-|--------|------|----------|
-| **Energia** | Setor elétrico brasileiro | ABRADEE, ABIAPE, ABEEólica, ABRAGE, ABiogás, Renova Energia, ABRATE |
-| **ABRASCA** | Mercado de capitais | ABRASCA |
+## O que faz
 
----
+O pipeline completo coleta, filtra e exporta notícias em 6 etapas:
 
-## Como funciona
+1. **Coleta híbrida** — RSS direto de 18 veículos (Valor Econômico, Estadão, Folha, O Globo, CNN Brasil, etc.) + busca interna (Lupa) em portais WordPress + fallback via Google News
+2. **Pré-filtro rápido** — Descarta matérias irrelevantes usando apenas título e resumo do RSS, sem baixar o texto completo
+3. **Filtragem semântica em 4 níveis** — Analisa o texto completo do artigo:
+   - **Nível 1** (menção direta): Nome, sigla ou líderes dos clientes-alvo → aprovação imediata
+   - **Nível 2** (cenário macro/regulatório): Chaves setoriais como ANEEL, MME, leilões de energia, CVM, IPO, B3
+   - **Nível 3** (rede de arrasto): Palavras amplas do setor + validação contextual cruzada com jargão de negócio
+   - **Nível 4** (blacklist): Veto automático para esportes, saúde, automotivo, entretenimento, astrologia, etc.
+4. **Encurtamento de links** — IS.GD com failover para TinyURL, validação HTTP em cada link
+5. **Exportação Word** — Relatório `.docx` formatado com negrito, links clicáveis e estrutura pronta para copiar e colar no WhatsApp
+6. **Arquivamento** — Manifesto `.csv` + movimentação de relatórios antigos para pasta de arquivo
 
-O pipeline completo (executado via `python main.py`) segue estas etapas:
+## Módulos
 
-1. **Coleta** — RSS direto de 18 veículos + busca interna (Lupa) em portais WordPress + fallback via Google News
-2. **Pré-filtro rápido** — Descarta matérias claramente irrelevantes usando apenas título e resumo do RSS
-3. **Análise semântica (Níveis 1–4)** — Avalia o texto completo com matriz de filtragem:
-   - **Nível 1**: Clientes-alvo (nome, sigla, líderes)
-   - **Nível 2**: Chaves macro e regulatórias (ANEEL, MME, leilões, etc.)
-   - **Nível 3**: Rede de arrasto com dupla validação contextual
-   - **Nível 4**: Blacklist de ambiguidade (esportes, saúde, automotivo, etc.)
-4. **Encurtamento de links** — IS.GD com failover para TinyURL
-5. **Exportação** — Gera relatório `.docx` formatado para WhatsApp + manifesto `.csv`
+| Módulo | Foco | Clientes monitorados |
+|--------|------|----------------------|
+| **Energia/** | Setor elétrico brasileiro | ABRADEE, ABIAPE, ABEEólica, ABRAGE, ABiogás, Renova Energia, ABRATE |
+| **ABRASCA/** | Mercado de capitais | ABRASCA (Associação Brasileira das Companhias Abertas) |
+
+## Destaques técnicos
+
+- **6 workers concorrentes** para coleta e análise de texto
+- **Cache persistente** de full-text (JSON, até 4000 entradas) para evitar scraping repetido
+- **Proteção contra rate-limit** no Google News com circuit-breaker e cooldown adaptativo
+- **Fuso horário de Brasília** (UTC-3) em todas as operações
+- **Monitoramento de saúde** dos feeds (alerta após 3 falhas consecutivas)
 
 ---
 
