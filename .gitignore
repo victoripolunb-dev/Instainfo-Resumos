@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs e\Cache
+**/Logs/
+**/Cache/
+**/Relatórios/
+**/Arquivo/
+
+# Arquivos de execução temporários
+run_pipeline*.txt
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store

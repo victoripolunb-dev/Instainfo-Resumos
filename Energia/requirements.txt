@@ -1,0 +1,14 @@
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+feedparser>=6.0.10
+python-docx>=1.1.0
+tzdata>=2024.1
+# Decodifica URLs de rastreamento do Google News para a URL canônica do portal
+# original (link final do relatório não fica preso em news.google.com).
+googlenewsdecoder>=0.1.7
+
+# OPCIONAL: newspaper3k é usado pelo scraper quando disponível, com fallback
+# automático para BeautifulSoup. Não instala no Python >= 3.13; para usar,
+# ative antes:  pip install "newspaper3k>=0.2.8"
+# newspaper3k>=0.2.8
