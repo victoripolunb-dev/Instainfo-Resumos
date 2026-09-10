@@ -65,17 +65,17 @@ def para_brasilia(dt):
 # -----------------------------------------------------------------------------
 # Detecta automaticamente o usuário do Windows e constrói o caminho absoluto
 # onde o relatório .docx será salvo:
-#   C:\Users\[NOME_DO_USUARIO]\Desktop\Instainfo Resumos\Energia
+#   C:\Users\[NOME_DO_USUARIO]\Desktop\Instainfo Resumos - Entregas\Energia
 # A variável de ambiente USERPROFILE no Windows contém o diretório do usuário.
 # -----------------------------------------------------------------------------
 USER_PROFILE = os.environ.get("USERPROFILE", os.path.expanduser("~"))
-BASE_DIR = os.path.join(USER_PROFILE, "Desktop", "Instainfo Resumos", "Energia")
+BASE_DIR = os.path.join(USER_PROFILE, "Desktop", "Instainfo Resumos - Entregas", "Energia")
 
 # -----------------------------------------------------------------------------
 # ORGANIZAÇÃO DAS ENTREGAS EM PASTAS
 # -----------------------------------------------------------------------------
 # A pasta de entrega fica dentro do projeto:
-#   C:\Users\[USUARIO]\Desktop\Instainfo Resumos\Energia\Resumos diários - Energia
+#   C:\Users\[USUARIO]\Desktop\Instainfo Resumos - Entregas\Energia\Resumos diários - Energia
 # E dentro dela as entregas são organizadas por tipo:
 #   Relatórios\  -> Clipping_Energia_<data>_<hora>.docx
 #   Logs\        -> execucao.log (rastro das execuções do pipeline)
@@ -133,6 +133,20 @@ CACHE_FLUSH_A_CADA = 50
 # Conforme especificado no Capítulo 7, o padrão é timeout=10.
 # -----------------------------------------------------------------------------
 TIMEOUT = 10
+
+
+# -----------------------------------------------------------------------------
+# FALLBACK SCRAPLING (PLANO B) — bypass de anti-bot/403/layout
+# -----------------------------------------------------------------------------
+# Quando uma requisição do requests falha (exceção de rede, HTTP 403/429/5xx,
+# página-desafio de Cloudflare) ou o seletor de <p> volta vazio, o scraper.py
+# tenta baixar o mesmo HTML através do Scrapling (impersonação de TLS/headers
+# de navegador real). Import é preguiçoso: sem `pip install "scrapling[fetchers]"`
+# o plano B vira no-op (retorna None) e o pipeline segue igual a antes.
+SCRAPLING_FALLBACK = True           # liga/desliga o plano B sem mexer no código.
+SCRAPLING_STEALTH = False           # True = StealthyFetcher (Chromium headless)
+                                    # em último caso — mais lento e pesado.
+SCRAPLING_FALLBACK_ALVO_STATUS = (403, 429, 500, 502, 503)
 
 
 # -----------------------------------------------------------------------------

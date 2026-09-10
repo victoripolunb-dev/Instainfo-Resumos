@@ -8,6 +8,12 @@ tzdata>=2024.1
 # original (link final do relatório não fica preso em news.google.com).
 googlenewsdecoder>=0.1.7
 
+# PLANO B (anti-bot/403/layout): quando o requests falha ou cai em página-
+# desafio (Cloudflare etc.), o scraper baixa o HTML via Scrapling (impersonação
+# de TLS/headers de navegador real). É importado de forma preguiçosa: sem esta
+# linha instalada, o plano B vira no-op e o motor segue igual a antes.
+scrapling[fetchers]>=0.1.8
+
 # OPCIONAL: newspaper3k é usado pelo scraper quando disponível, com fallback
 # automático para BeautifulSoup. Não instala no Python >= 3.13; para usar,
 # ative antes:  pip install "newspaper3k>=0.2.8"

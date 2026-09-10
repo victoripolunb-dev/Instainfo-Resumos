@@ -51,7 +51,7 @@ PROJETO_PASTA_ENTREGA = "Resumos diários - ABRASCA"
 # CAMINHOS DE SAÍDA
 # -----------------------------------------------------------------------------
 USER_PROFILE = os.environ.get("USERPROFILE", os.path.expanduser("~"))
-BASE_DIR = os.path.join(USER_PROFILE, "Desktop", "Instainfo Resumos", PROJETO_DIR)
+BASE_DIR = os.path.join(USER_PROFILE, "Desktop", "Instainfo Resumos - Entregas", PROJETO_DIR)
 
 # -----------------------------------------------------------------------------
 # ORGANIZAÇÃO DAS ENTREGAS EM PASTAS
@@ -85,6 +85,20 @@ CACHE_FLUSH_A_CADA = 50
 # TIMEOUT PADRÃO (segundos)
 # -----------------------------------------------------------------------------
 TIMEOUT = 10
+
+
+# -----------------------------------------------------------------------------
+# FALLBACK SCRAPLING (PLANO B) — bypass de anti-bot/403/layout
+# -----------------------------------------------------------------------------
+# Quando uma requisição do requests falha (exceção de rede, HTTP 403/429/5xx,
+# página-desafio de Cloudflare) ou o seletor de <p> volta vazio, o scraper.py
+# tenta baixar o mesmo HTML através do Scrapling (impersonação de TLS/headers
+# de navegador real). Import é preguiçoso: sem `pip install "scrapling[fetchers]"`
+# o plano B vira no-op (retorna None) e o pipeline segue igual a antes.
+SCRAPLING_FALLBACK = True           # liga/desliga o plano B sem mexer no código.
+SCRAPLING_STEALTH = False           # True = StealthyFetcher (Chromium headless)
+                                    # em último caso — mais lento e pesado.
+SCRAPLING_FALLBACK_ALVO_STATUS = (403, 429, 500, 502, 503)
 
 
 # -----------------------------------------------------------------------------

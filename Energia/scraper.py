@@ -783,6 +783,189 @@ class ScraperEngine:
         return soup
 
     # ------------------------------------------------------------------
+    # PLANO B — SCRAPLING (bypass de anti-bot/403/layout mudado)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _parece_bloqueio(status, html_text):
+        """
+        Detecta resposta bloqueada/desafio de anti-bot. O requests pode voltar
+        HTTP 200 com uma página-desafio (iframe 'cf-chl', captcha, "just a
+        moment"...). Nesses casos o Scrapling entra como plano B.
+        """
+        if status in config.SCRAPLING_FALLBACK_ALVO_STATUS:
+            return True
+        amostra = (html_text or "")[:4000].lower()
+        return any(
+            marcador in amostra
+            for marcador in (
+                "captcha",
+                "cf-challenge",
+                "cf-chl-",
+                "checking your browser",
+                "just a moment",
+                "attention required",
+            )
+        )
+
+    def _buscar_html_scrapling(self, url):
+        """
+        PLANO B: baixa a URL via Scrapling (Fetcher), que impersona o TLS e os
+        headers de um navegador real — contorna proteções básicas de anti-bot
+        (Cloudflare interstitial, checagens por User-Agent padrão, etc.).
+
+        Ordem (do mais barato ao mais pesado):
+          1) Fetcher (HTTP/TLS impersonado, SEM navegador) — resolve a maioria
+             dos bloqueios;
+          2) StealthyFetcher (Chromium headless) — SÓ quando config.
+             SCRAPLING_STEALTH estiver True E o Fetcher voltar sem <p> (página
+             renderizada por JS) ou falhar.
+
+        Import é PREGUIÇOSO e falhas são não-fatais: se a biblioteca não estiver
+        instalada (`pip install "scrapling[fetchers]"`) ou a requisição falhar,
+        retorna None e o pipeline segue exatamente como antes (sem regressão).
+
+        Retorna o HTML (str) ou None.
+        """
+        try:
+            from scrapling.fetchers import Fetcher
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(
+                "Scrapling não disponível (instale 'scrapling[fetchers]'): %s",
+                exc,
+            )
+            return None
+        StealthyFetcher = None
+        if config.SCRAPLING_STEALTH:
+            try:
+                from scrapling.fetchers import StealthyFetcher
+            except Exception as exc:  # noqa: BLE001
+                logger.debug(
+                    "StealthyFetcher não disponível (requer playwright): %s",
+                    exc,
+                )
+
+        html_fetcher = None
+        tempo_anterior = socket.getdefaulttimeout()
+        try:
+            # 1) Fetcher (sem navegador): passa barato, resolve a maioria.
+            try:
+                page = Fetcher.get(
+                    url,
+                    impersonate="chrome",
+                    stealthy_headers=True,
+                    timeout=config.TIMEOUT,
+                )
+                if 200 <= page.status < 400:
+                    html_txt = page.body.decode(
+                        page.encoding or "utf-8", errors="replace"
+                    )
+                    # Conteúdo já veio (tem <p>) OU o browser está desligado:
+                    # não vale a pena gastar navegador.
+                    if not StealthyFetcher or self._tem_paragrafos(html_txt):
+                        return html_txt
+                    # Página que parece renderizar por JS: guarda o que veio e
+                    # tenta o browser abaixo.
+                    html_fetcher = html_txt
+                else:
+                    logger.debug(
+                        "Scrapling retornou HTTP %s para %s", page.status, url
+                    )
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("Fetcher falhou para %s: %s", url, exc)
+
+            # 2) StealthyFetcher (browser): último recurso, só se habilitado e
+            # o Fetcher não trouxe o corpo (JS/desafio duro).
+            if StealthyFetcher is not None:
+                try:
+                    socket.setdefaulttimeout(config.TIMEOUT * 3)
+                    page = StealthyFetcher.fetch(url, headless=True)
+                    if 200 <= page.status < 400:
+                        return page.body.decode(
+                            page.encoding or "utf-8", errors="replace"
+                        )
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug("StealthyFetcher falhou para %s: %s", url, exc)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Fallback Scrapling falhou para %s: %s", url, exc)
+        finally:
+            socket.setdefaulttimeout(tempo_anterior)
+        return html_fetcher
+
+    @staticmethod
+    def _tem_paragrafos(html_text):
+        """
+        True se o HTML já contém ao menos um <p> com texto útil — sinal de que
+        a página NÃO depende de JavaScript para exibir o corpo editorial (e o
+        Fetcher simples resolve, sem precisar de navegador).
+        """
+        try:
+            soup = BeautifulSoup(html_text or "", "lxml")
+            return any(p.get_text(strip=True) for p in soup.find_all("p"))
+        except Exception:  # noqa: BLE001
+            return False
+
+    @staticmethod
+    def _extrair_corpo_paragrafos(html_text):
+        """
+        Sanitiza o HTML (removendo ruído) e extrai o texto editorial dos <p>.
+        Reutilizado pelo full-text (requests e fallback Scrapling) para que o
+        plano B produza EXATAMENTE o mesmo formato de saída — a validação
+        semântica e a regra de publicação ficam intactas.
+        """
+        try:
+            soup = BeautifulSoup(html_text, "lxml")
+            ScraperEngine._sanitizar_html(soup)
+            return "\n".join(
+                p.get_text(strip=True)
+                for p in soup.find_all("p")
+                if p.get_text(strip=True)
+            ).strip()
+        except Exception:  # noqa: BLE001
+            return ""
+
+    def _baixar_feed_com_fallback(self, url_feed, nome_veiculo):
+        """
+        Baixa o corpo de um feed RSS com timeout garantido + User-Agent real.
+        Se o servidor bloquear (HTTP != 200, com destaque para 403/429/5xx) e
+        o plano B Scrapling estiver ligado, tenta obter o mesmo conteúdo com
+        impersonação de TLS/headers (bypass de anti-bot básico).
+
+        Retorna o conteúdo do feed (bytes/str) ou None em caso de falha.
+        """
+        try:
+            resposta = requests.get(
+                url_feed,
+                headers=self._obter_headers(),
+                timeout=config.TIMEOUT,
+            )
+            if resposta.status_code == 200:
+                return resposta.content
+            logger.warning(
+                "Feed %s retornou HTTP %s (%s)",
+                url_feed,
+                resposta.status_code,
+                nome_veiculo,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(
+                "Falha no download do feed %s (%s): %s",
+                nome_veiculo,
+                url_feed,
+                exc,
+            )
+
+        if config.SCRAPLING_FALLBACK:
+            html_scrapling = self._buscar_html_scrapling(url_feed)
+            if html_scrapling:
+                logger.info(
+                    "Fallback Scrapling OK no feed de %s (%s)",
+                    nome_veiculo,
+                    url_feed,
+                )
+                return html_scrapling
+        return None
+
+    # ------------------------------------------------------------------
     # EXTRAÇÃO DO TEXTO COMPLETO + DATA (Full-Text + metadados)
     # ------------------------------------------------------------------
     def _obter_texto_e_data(self, url):
@@ -866,6 +1049,9 @@ class ScraperEngine:
 
         # ---- TENTATIVA 2: fallback com BeautifulSoup ----
         if not texto:
+            obtido_ok = False
+            bloqueado = False
+            scrapling_tentado = False
             try:
                 response = requests.get(
                     url_final,
@@ -877,20 +1063,42 @@ class ScraperEngine:
                 if response.encoding is None or response.encoding.lower() not in ("utf-8", "utf8"):
                     response.encoding = response.apparent_encoding or "utf-8"
                 html_text = response.text
-
-                soup = BeautifulSoup(html_text, "lxml")
-                # Remove o ruído pré-existente ao corpo editorial (ver
-                # _sanitizar_html) para que a matriz semântica receba apenas
-                # o texto jornalístico — sem newsletter/leia também/ads.
-                self._sanitizar_html(soup)
-                # Extrai todos os parágrafos e junta com espaços.
-                paragrafos = [
-                    p.get_text(strip=True) for p in soup.find_all("p")
-                    if p.get_text(strip=True)
-                ]
-                texto = "\n".join(paragrafos).strip()
+                obtido_ok = True
+                bloqueado = self._parece_bloqueio(
+                    response.status_code, html_text
+                )
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Scraping HTML falhou para %s: %s", url_final, exc)
+
+            # ---- TENTATIVA 3: Scrapling (plano B) quando o requests falhou ----
+            # Dispara em: exceção de rede, HTTP de bloqueio (403/429/5xx) ou
+            # página-desafio de anti-bot escondida atrás de um 200.
+            if config.SCRAPLING_FALLBACK and (not obtido_ok or bloqueado):
+                scrapling_tentado = True
+                html_scrapling = self._buscar_html_scrapling(url_final)
+                if html_scrapling:
+                    logger.info(
+                        "Fallback Scrapling OK (anti-bot) para %s...",
+                        url_final[:80],
+                    )
+                    html_text = html_scrapling
+
+            if html_text:
+                texto = self._extrair_corpo_paragrafos(html_text)
+
+            # ---- TENTATIVA 4: seletor de <p> vazio (layout mudou) ----
+            # requests respondeu 200 com um HTML "normal", mas nenhum <p> foi
+            # achado; o Scrapling pode entregar o corpo com outra visão. Só
+            # entra se o plano B ainda não foi tentado neste loop para a URL.
+            if not texto and not scrapling_tentado and config.SCRAPLING_FALLBACK:
+                html_scrapling = self._buscar_html_scrapling(url_final)
+                if html_scrapling and not (html_text and html_scrapling == html_text):
+                    logger.info(
+                        "Fallback Scrapling OK (conteúdo vazio) para %s...",
+                        url_final[:80],
+                    )
+                    html_text = html_scrapling
+                    texto = self._extrair_corpo_paragrafos(html_text)
 
         # ---- DATA DE PUBLICAÇÃO ORIGINAL (via meta tags do HTML) ----
         data_pub_original = None
@@ -975,21 +1183,12 @@ class ScraperEngine:
             # Baixa o feed via requests com timeout garantido + User-Agent
             # real. feedparser.parse(url) direto usa urllib interno SEM timeout,
             # o que pode prender um worker (e atrasar todo o run) num feed lento.
-            resposta = requests.get(
-                rss_url,
-                headers=self._obter_headers(),
-                timeout=config.TIMEOUT,
-            )
-            if resposta.status_code != 200:
+            # Em bloqueio (403/429/5xx) o plano B Scrapling assume a baixa.
+            conteudo_feed = self._baixar_feed_com_fallback(rss_url, nome_veiculo)
+            if conteudo_feed is None:
                 _marcar_falha()
-                logger.warning(
-                    "Feed %s retornou HTTP %s (%s)",
-                    rss_url,
-                    resposta.status_code,
-                    nome_veiculo,
-                )
                 return noticias
-            feed = feedparser.parse(resposta.content)
+            feed = feedparser.parse(conteudo_feed)
 
             # Verifica se houve erro no parse do feed.
             if getattr(feed, "bozo", False) and not feed.entries:
@@ -1317,15 +1516,14 @@ class ScraperEngine:
         try:
             # Baixa o feed via requests (timeout garantido + User-Agent real)
             # e faz o parse do conteúdo — feedparser.parse(url) direto não
-            # expõe timeout, arriscando travar o pipeline num feed lento.
-            resposta = requests.get(
-                url_feed_busca,
-                headers=self._obter_headers(),
-                timeout=config.TIMEOUT,
+            # expõe timeout, arriscando travar o pipeline num feed lento. Se o
+            # portal bloquear (403/429/5xx), o plano B Scrapling tenta baixar.
+            conteudo_feed = self._baixar_feed_com_fallback(
+                url_feed_busca, nome_veiculo
             )
-            if resposta.status_code != 200:
+            if conteudo_feed is None:
                 return registros
-            feed = feedparser.parse(resposta.content)
+            feed = feedparser.parse(conteudo_feed)
 
             if getattr(feed, "bozo", False) and not feed.entries:
                 return registros

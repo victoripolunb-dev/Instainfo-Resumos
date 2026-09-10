@@ -1,0 +1,79 @@
+{
+  "cliente": "Associação de Varejo e Shoppings",
+  "contexto": "Acompanhar o varejo e o desempenho das lojas físicas e digital (e-commerce, marketplaces). Gerar clipping do setor com ênfase em resultados de vendas, comportamento do consumidor e o ambiente de shopping centers no Brasil.",
+  "variacoes": [
+    "varejistas associados",
+    "shoppings associados"
+  ],
+  "representantes": [],
+  "data_inicio": "08/09/2026",
+  "data_fim": "10/09/2026",
+  "veiculos": [
+    "Valor Econômico",
+    "Estadão",
+    "Folha de S. Paulo",
+    "O Globo",
+    "G1",
+    "Poder 360",
+    "CNN Brasil",
+    "Metrópoles",
+    "Veja",
+    "Portal UOL",
+    "Portal JOTA",
+    "Brazil Journal",
+    "InfoMoney",
+    "Portal Exame",
+    "Correio Braziliense",
+    "NeoFeed",
+    "Agência Brasil"
+  ],
+  "palavras_chave": [
+    "varejo",
+    "comércio",
+    "vendas",
+    "shoppings",
+    "e-commerce",
+    "Mercado Livre",
+    "Amazon",
+    "Shopee",
+    "Temu",
+    "compras",
+    "consumo",
+    "lojistas",
+    "marketplace",
+    "via varejo"
+  ],
+  "palavras_chave_fortes": [
+    "Amazon",
+    "Mercado Livre",
+    "Shopee",
+    "Temu",
+    "marketplace"
+  ],
+  "termos_contexto": [
+    "loja",
+    "shopping",
+    "consumidor",
+    "varejista",
+    "ponto de venda",
+    "lojas físicas",
+    "lojas fisicas",
+    "black friday",
+    "natal",
+    "fatia de mercado"
+  ],
+  "termos_exclusao": [
+    "comércio de armas",
+    "comércio de veículos",
+    "comércio de drogas",
+    "tráfico",
+    "contrabando",
+    "pessoa física",
+    "pessoa fisica",
+    "auxílio",
+    "bolsa família",
+    "consórcio",
+    "leasing"
+  ],
+  "destacar_clipping": true
+}
